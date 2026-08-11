@@ -1,3 +1,9 @@
 GEMINI_API_KEY=your_api_key_here
-
 GEMINI_MODEL=gemini-3.6-flash
+
+TESTER_KEYS=abc123,def456,ghi789,jkl012,mno345
+
+DAILY_USER_LIMIT=10
+DAILY_GLOBAL_LIMIT=50
+
+REDIS_URL=rediss://default:PASSWORD@HOST:PORT

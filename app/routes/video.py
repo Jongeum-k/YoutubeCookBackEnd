@@ -3,13 +3,15 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
+from app.core.redis import redis_client
 from app.schemas.video import AnalyzeVideoRequest, RecipeAnalysis
 from app.services.gemini import GeminiService
-
+from app.services.quota import QuotaService, InvalidTesterKeyError, QuotaExceededError
 
 router = APIRouter()
 
 gemini_service = GeminiService()
+quota_service = QuotaService(redis_client)
 
 
 @router.websocket("/ws/analyze-video")
@@ -22,6 +24,19 @@ async def analyze_cooking_video(
         payload = await websocket.receive_json()
 
         request = AnalyzeVideoRequest.model_validate(payload)
+
+        tester_count, global_count = await quota_service.consume(
+            request.tester_key
+        )
+
+        await websocket.send_json(
+            {
+                "type": "quota",
+                "used": tester_count,
+                "global_used": global_count,
+                "global_limit": 50,
+            }
+        )
 
         await websocket.send_json(
             {
@@ -53,6 +68,22 @@ async def analyze_cooking_video(
                 "type": "completed",
                 "data": result.model_dump(),
                 "model": gemini_service.model,
+            }
+        )
+    except InvalidTesterKeyError:
+        await websocket.send_json(
+            {
+                "type": "error",
+                "code": "invalid_tester_key",
+            }
+        )
+
+    except QuotaExceededError as exc:
+        await websocket.send_json(
+            {
+                "type": "error",
+                "code": "quota_exceeded",
+                "message": str(exc),
             }
         )
 

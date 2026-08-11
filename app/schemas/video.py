@@ -36,4 +36,5 @@ class RecipeAnalysis(BaseModel):
 
 
 class AnalyzeVideoRequest(BaseModel):
+    tester_key: str
     youtube_url: HttpUrl

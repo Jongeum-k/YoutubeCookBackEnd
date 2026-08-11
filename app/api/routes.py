@@ -1,20 +1,20 @@
 from fastapi import APIRouter, HTTPException
 from starlette.concurrency import run_in_threadpool
 
-from app.schemas import AnalyzeTextRequest, AnalyzeTextResponse
+from app.schemas.schemas import AnalyzeTextRequest, AnalyzeTextResponse
 from app.services.gemini import GeminiService
 
-router = APIRouter()
+test_router = APIRouter()
 
 gemini_service = GeminiService()
 
 
-@router.get("/health")
+@test_router.get("/health")
 async def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@router.post("/analyze", response_model=AnalyzeTextResponse)
+@test_router.post("/analyze", response_model=AnalyzeTextResponse)
 async def analyze_cooking_text(
     request: AnalyzeTextRequest,
 ) -> AnalyzeTextResponse:
