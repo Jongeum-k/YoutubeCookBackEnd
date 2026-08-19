@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from app.api.routes import test_router
 from app.routes.video import router
 from app.routes.health import router as health_router
+from app.routes.dashboard import router as dashboard_router
 
 app = FastAPI(
     title="YouTube Cook Backend",
@@ -23,7 +24,11 @@ app.include_router(
 app.include_router(
     health_router,
     prefix="/api/v1",
+)
 
+app.include_router(
+    dashboard_router,
+    prefix="/api/v1",
 )
 
 @app.get("/")
