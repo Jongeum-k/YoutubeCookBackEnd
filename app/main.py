@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import test_router
 from app.routes.video import router
@@ -29,6 +30,19 @@ app.include_router(
 app.include_router(
     dashboard_router,
     prefix="/api/v1",
+)
+
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+    ],
+    allow_credentials=True,
+    allow_methods=["GET"],
+    allow_headers=["X-Tester-Key"],
 )
 
 @app.get("/")
