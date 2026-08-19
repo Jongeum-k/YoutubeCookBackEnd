@@ -751,7 +751,7 @@ The architecture is intentionally small enough to operate easily while keeping c
 Clone the repository:
 ```bash
 git clone https://github.com/Jongeum-k/YoutubeCookBackEnd.git
-cd VivEngineProject
+cd YoutubeCookBackEnd
 ```
 
 Install dependencies:
@@ -761,7 +761,7 @@ uv sync
 
 Set up environment variables and Docker config:
 ```bash
-# Create .env and docker-compose.yml from the provided examples
+# Create .env from the provided examples
 cp .env.example .env
 ```
 Open `.env` and fill in your credentials (GEMINI API KEY, `DATABASE_URL`, `REDIS_URL`, etc.).
