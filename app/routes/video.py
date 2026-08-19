@@ -12,11 +12,14 @@ from app.services.quota import (
     QuotaExceededError,
     QuotaService,
 )
+from app.services.pricing import GeminiPricingService
+
 
 router = APIRouter()
 
 gemini_service = GeminiService()
 quota_service = QuotaService(redis_client)
+pricing_service = GeminiPricingService()
 
 
 @router.websocket("/ws/analyze-video")
@@ -55,6 +58,8 @@ async def analyze_cooking_video(
         response_id: str | None = None
         model_version: str | None = None
 
+        cost = None
+
         async for chunk in gemini_service.analyze_cooking_video_stream(
             str(request.youtube_url)
         ):
@@ -70,6 +75,10 @@ async def analyze_cooking_video(
 
             if chunk.usage:
                 usage = chunk.usage
+                cost = pricing_service.calculate_cost(
+                    model=gemini_service.model,
+                    usage=usage,
+                )
 
             if chunk.response_id:
                 response_id = chunk.response_id
@@ -78,17 +87,7 @@ async def analyze_cooking_video(
                 model_version = chunk.model_version
 
         raw_result = "".join(chunks)
-
         result = RecipeAnalysis.model_validate_json(raw_result)
-
-        print(
-            "Gemini usage:",
-            usage,
-            "response_id:",
-            response_id,
-            "model_version:",
-            model_version,
-        )
 
         await websocket.send_json(
             {
@@ -108,6 +107,19 @@ async def analyze_cooking_video(
                     if usage
                     else None
                 ),
+                "cost": (
+                    {
+                        "total_usd": str(cost.total_usd),
+                        "input_cost_usd": str(cost.input_cost_usd),
+                        "output_cost_usd": str(cost.output_cost_usd),
+                        "cached_input_cost_usd": str(
+                            cost.cached_input_cost_usd
+                        ),
+                        "pricing_version": cost.pricing_version,
+                    }
+                    if cost
+                    else None
+                )
             }
         )
 

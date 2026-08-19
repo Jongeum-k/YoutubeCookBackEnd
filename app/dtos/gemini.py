@@ -1,6 +1,7 @@
 # app/dtos/gemini.py
 
 from dataclasses import dataclass
+from decimal import Decimal
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,3 +19,11 @@ class GeminiStreamChunk:
     usage: GeminiUsage | None = None
     response_id: str | None = None
     model_version: str | None = None
+
+@dataclass(frozen=True, slots=True)
+class GeminiCost:
+    total_usd: Decimal
+    input_cost_usd: Decimal
+    output_cost_usd: Decimal
+    cached_input_cost_usd: Decimal
+    pricing_version: str
