@@ -6,6 +6,7 @@ from google import genai
 from google.genai import types
 
 from app.core.config import get_settings
+from app.dtos.gemini import GeminiStreamChunk, GeminiUsage
 from app.schemas.video import RecipeAnalysis
 
 class GeminiService:
@@ -51,7 +52,7 @@ Transcript:
     async def analyze_cooking_video_stream(
         self,
         youtube_url: str,
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[GeminiStreamChunk]:
         prompt = """
 Analyze this cooking video and extract the recipe.
 
@@ -105,5 +106,22 @@ when they are not present or reasonably inferable.
         )
 
         async for chunk in stream:
-            if chunk.text:
-                yield chunk.text
+            usage = None
+
+            if chunk.usage_metadata:
+                metadata = chunk.usage_metadata
+
+                usage = GeminiUsage(
+                    input_tokens=metadata.prompt_token_count or 0,
+                    output_tokens=metadata.candidates_token_count or 0,
+                    thoughts_tokens=metadata.thoughts_token_count or 0,
+                    total_tokens=metadata.total_token_count or 0,
+                    cached_tokens=metadata.cached_content_token_count or 0,
+                )
+            if chunk.text or usage:
+                yield GeminiStreamChunk(
+                    text=chunk.text or None,
+                    usage=usage,
+                    response_id=chunk.response_id,
+                    model_version=chunk.model_version,
+                )

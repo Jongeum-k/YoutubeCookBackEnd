@@ -4,9 +4,14 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
 from app.core.redis import redis_client
+from app.dtos.gemini import GeminiUsage
 from app.schemas.video import AnalyzeVideoRequest, RecipeAnalysis
 from app.services.gemini import GeminiService
-from app.services.quota import QuotaService, InvalidTesterKeyError, QuotaExceededError
+from app.services.quota import (
+    InvalidTesterKeyError,
+    QuotaExceededError,
+    QuotaService,
+)
 
 router = APIRouter()
 
@@ -46,30 +51,66 @@ async def analyze_cooking_video(
         )
 
         chunks: list[str] = []
+        usage: GeminiUsage | None = None
+        response_id: str | None = None
+        model_version: str | None = None
 
         async for chunk in gemini_service.analyze_cooking_video_stream(
             str(request.youtube_url)
         ):
-            chunks.append(chunk)
+            if chunk.text:
+                chunks.append(chunk.text)
 
-            await websocket.send_json(
-                {
-                    "type": "delta",
-                    "content": chunk,
-                }
-            )
+                await websocket.send_json(
+                    {
+                        "type": "delta",
+                        "content": chunk.text,
+                    }
+                )
+
+            if chunk.usage:
+                usage = chunk.usage
+
+            if chunk.response_id:
+                response_id = chunk.response_id
+
+            if chunk.model_version:
+                model_version = chunk.model_version
 
         raw_result = "".join(chunks)
 
         result = RecipeAnalysis.model_validate_json(raw_result)
+
+        print(
+            "Gemini usage:",
+            usage,
+            "response_id:",
+            response_id,
+            "model_version:",
+            model_version,
+        )
 
         await websocket.send_json(
             {
                 "type": "completed",
                 "data": result.model_dump(),
                 "model": gemini_service.model,
+                "model_version": model_version,
+                "response_id": response_id,
+                "usage": (
+                    {
+                        "input_tokens": usage.input_tokens,
+                        "output_tokens": usage.output_tokens,
+                        "thoughts_tokens": usage.thoughts_tokens,
+                        "total_tokens": usage.total_tokens,
+                        "cached_tokens": usage.cached_tokens,
+                    }
+                    if usage
+                    else None
+                ),
             }
         )
+
     except InvalidTesterKeyError:
         await websocket.send_json(
             {
