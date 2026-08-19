@@ -171,8 +171,8 @@ class QuotaService:
         )
 
     async def commit(
-        self,
-        reservation: QuotaReservation,
+            self,
+            reservation: QuotaReservation,
     ) -> None:
         (
             _,
@@ -180,6 +180,7 @@ class QuotaService:
             reservation_key,
         ) = self._build_keys(
             tester_key=reservation.tester_key,
+            quota_date=reservation.quota_date,
             reservation_id=reservation.reservation_id,
         )
 
@@ -190,8 +191,8 @@ class QuotaService:
         )
 
     async def rollback(
-        self,
-        reservation: QuotaReservation,
+            self,
+            reservation: QuotaReservation,
     ) -> None:
         (
             tester_usage_key,
@@ -199,6 +200,7 @@ class QuotaService:
             reservation_key,
         ) = self._build_keys(
             tester_key=reservation.tester_key,
+            quota_date=reservation.quota_date,
             reservation_id=reservation.reservation_id,
         )
 

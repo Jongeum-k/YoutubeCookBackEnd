@@ -69,6 +69,20 @@ class GeminiRequest(Base):
         server_default="0",
     )
 
+    thoughts_tokens: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+
+    cached_tokens: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+
     total_tokens: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -135,6 +149,14 @@ class GeminiRequest(Base):
         CheckConstraint(
             "output_tokens >= 0",
             name="chk_output_tokens_non_negative",
+        ),
+        CheckConstraint(
+            "thoughts_tokens >= 0",
+            name="chk_thoughts_tokens_non_negative",
+        ),
+        CheckConstraint(
+            "cached_tokens >= 0",
+            name="chk_cached_tokens_non_negative",
         ),
         CheckConstraint(
             "total_tokens >= 0",
