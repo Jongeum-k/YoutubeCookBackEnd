@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from app.core.redis import redis_client
 from app.dtos.gemini import GeminiUsage
+from app.dtos.quota import QuotaReservation
 from app.schemas.video import AnalyzeVideoRequest, RecipeAnalysis
 from app.services.gemini import GeminiService
 from app.services.quota import (
@@ -28,20 +29,22 @@ async def analyze_cooking_video(
 ) -> None:
     await websocket.accept()
 
+    reservation: QuotaReservation | None = None
+
     try:
         payload = await websocket.receive_json()
 
         request = AnalyzeVideoRequest.model_validate(payload)
 
-        tester_count, global_count = await quota_service.consume(
+        reservation = await quota_service.reserve(
             request.tester_key
         )
 
         await websocket.send_json(
             {
                 "type": "quota",
-                "used": tester_count,
-                "global_used": global_count,
+                "used": reservation.tester_count,
+                "global_used": reservation.global_count,
                 "global_limit": 50,
             }
         )
@@ -141,9 +144,14 @@ async def analyze_cooking_video(
         )
 
     except WebSocketDisconnect:
+        if reservation:
+            await quota_service.rollback(reservation)
         return
 
     except ValidationError as exc:
+        if reservation:
+            await quota_service.rollback(reservation)
+
         await websocket.send_json(
             {
                 "type": "error",
@@ -153,6 +161,9 @@ async def analyze_cooking_video(
         )
 
     except Exception as exc:
+        if reservation:
+            await quota_service.rollback(reservation)
+
         await websocket.send_json(
             {
                 "type": "error",
