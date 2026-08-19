@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-3.6-flash"
 
     redis_url: str
+    database_url: str
 
     tester_keys: str
 
@@ -32,3 +33,5 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+settings = get_settings()

@@ -8,7 +8,6 @@ from google.genai import types
 from app.core.config import get_settings
 from app.schemas.video import RecipeAnalysis
 
-
 class GeminiService:
     def __init__(self) -> None:
         settings = get_settings()
