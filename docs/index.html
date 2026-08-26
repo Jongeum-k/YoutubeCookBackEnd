@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YouTube Cook Dashboard</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #f7f1e8;
+      color: #191919;
+      font-family:
+        -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 20px 60px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      margin-top: 6px;
+      color: #777;
+      font-size: 14px;
+    }
+
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: end;
+    }
+
+    .filter {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: #777;
+    }
+
+    input,
+    button {
+      height: 38px;
+      border: 1px solid #ddd;
+      border-radius: 9px;
+      padding: 0 10px;
+      background: white;
+    }
+
+    button {
+      cursor: pointer;
+      background: #181818;
+      color: white;
+      border: none;
+      padding: 0 18px;
+      font-weight: 600;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid #e4ddd5;
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .metric-label {
+      color: #858585;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .metric-value {
+      margin-top: 12px;
+      font-size: 28px;
+      font-weight: 800;
+    }
+
+    .metric-description {
+      margin-top: 8px;
+      color: #999;
+      font-size: 12px;
+    }
+
+    .section {
+      margin-top: 18px;
+    }
+
+    .section-title {
+      margin: 0 0 20px;
+      font-size: 17px;
+    }
+
+    .chart {
+      height: 260px;
+      display: flex;
+      gap: 24px;
+      align-items: flex-end;
+      padding: 20px 10px 0;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .bar-wrapper {
+      flex: 1;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      min-width: 55px;
+    }
+
+    .bar-value {
+      margin-bottom: 8px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .bar {
+      width: 44px;
+      max-width: 80%;
+      background: #ff5a0a;
+      border-radius: 6px 6px 0 0;
+      min-height: 3px;
+    }
+
+    .bar-label {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #777;
+    }
+
+    .today-cost {
+      font-size: 38px;
+      font-weight: 800;
+      margin-bottom: 22px;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 9px 0;
+      color: #666;
+      font-size: 14px;
+    }
+
+    .detail-row strong {
+      color: #222;
+    }
+
+    .divider {
+      border-top: 1px solid #eee;
+      margin: 12px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      text-align: left;
+      color: #888;
+      font-size: 11px;
+      text-transform: uppercase;
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    td {
+      padding: 12px 10px;
+      border-bottom: 1px solid #eee;
+      font-size: 14px;
+    }
+
+    .video-list {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .video {
+      display: grid;
+      grid-template-columns: 110px 1fr auto;
+      gap: 15px;
+      align-items: center;
+      padding: 13px 0;
+      border-bottom: 1px solid #eee;
+    }
+
+    .thumbnail {
+      width: 110px;
+      height: 64px;
+      border-radius: 10px;
+      object-fit: cover;
+      background: #f3d5c5;
+    }
+
+    .video-title {
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+
+    .video-meta {
+      color: #888;
+      font-size: 12px;
+    }
+
+    .video-time {
+      color: #777;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .error {
+      background: #fff0f0;
+      color: #b00020;
+      padding: 12px 16px;
+      border-radius: 10px;
+      margin-bottom: 15px;
+      display: none;
+    }
+
+    @media (max-width: 800px) {
+      .grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .container {
+        padding: 20px 12px;
+      }
+
+      .video {
+        grid-template-columns: 80px 1fr;
+      }
+
+      .thumbnail {
+        width: 80px;
+        height: 55px;
+      }
+
+      .video-time {
+        display: none;
+      }
+    }
+  </style>
+</head>
+
+<body>
+<div class="container">
+
+  <header>
+    <div>
+      <h1>YouTube Cook Dashboard</h1>
+      <div class="subtitle">Gemini video analysis monitoring</div>
+    </div>
+
+    <div class="filters">
+      <label class="filter">
+        Start
+        <input id="startDate" type="date">
+      </label>
+
+      <label class="filter">
+        End
+        <input id="endDate" type="date">
+      </label>
+
+      <label class="filter">
+        Tester Key
+        <input
+          id="testerKey"
+          type="password"
+          placeholder="X-Tester-Key"
+        >
+      </label>
+
+      <button onclick="loadDashboard()">Load</button>
+    </div>
+  </header>
+
+  <div id="error" class="error"></div>
+
+  <!-- Overview -->
+  <div class="grid">
+    <div class="card">
+      <div class="metric-label">Total Videos</div>
+      <div id="totalVideos" class="metric-value">-</div>
+      <div class="metric-description">전체 누적</div>
+    </div>
+
+    <div class="card">
+      <div class="metric-label">Total Playtime</div>
+      <div id="totalPlaytime" class="metric-value">-</div>
+      <div class="metric-description">전체 누적</div>
+    </div>
+
+    <div class="card">
+      <div class="metric-label">Tokens</div>
+      <div id="totalTokens" class="metric-value">-</div>
+      <div class="metric-description">전체 누적</div>
+    </div>
+
+    <div class="card">
+      <div class="metric-label">Cost</div>
+      <div id="totalCost" class="metric-value">-</div>
+      <div class="metric-description">전체 누적</div>
+    </div>
+  </div>
+
+  <!-- Cost Chart -->
+  <div class="card section">
+    <h2 class="section-title">일별 비용 추이</h2>
+    <div id="costChart" class="chart"></div>
+  </div>
+
+  <!-- Today's metrics -->
+  <div class="card section">
+    <h2 class="section-title">오늘 영상당 평균 비용</h2>
+
+    <div id="averageCost" class="today-cost">$0.00</div>
+
+    <div class="detail-row">
+      <span>평균 처리 시간 / 영상</span>
+      <strong id="averageRuntime">-</strong>
+    </div>
+
+    <div class="detail-row">
+      <span>평균 토큰 사용량 / 영상</span>
+      <strong id="averageTokens">-</strong>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="detail-row">
+      <span>조회 기간 총 비용</span>
+      <strong id="periodCost">$0.00</strong>
+    </div>
+  </div>
+
+  <!-- Daily details -->
+  <div class="card section">
+    <h2 class="section-title">일별 상세 내역</h2>
+
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Total Videos</th>
+            <th>Total Playtime</th>
+            <th>Tokens</th>
+            <th>Cost</th>
+          </tr>
+        </thead>
+
+        <tbody id="dailyDetails"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Videos -->
+  <div class="card section">
+    <h2 id="videoSectionTitle" class="section-title">
+      오늘 처리된 영상
+    </h2>
+
+    <div id="videoList" class="video-list"></div>
+  </div>
+
+</div>
+
+<script>
+  const API_BASE_URL = "https://youtube-cook-backend.onrender.com/api/v1";
+
+  function formatNumber(value) {
+    return Number(value ?? 0).toLocaleString();
+  }
+
+  function formatMoney(value) {
+    return `$${Number(value ?? 0).toFixed(4)}`;
+  }
+
+  function formatDuration(seconds) {
+    seconds = Math.round(Number(seconds ?? 0));
+
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    return [
+      hours.toString().padStart(2, "0"),
+      minutes.toString().padStart(2, "0"),
+      secs.toString().padStart(2, "0"),
+    ].join(":");
+  }
+
+  function formatDate(dateString) {
+    const date = new Date(`${dateString}T00:00:00`);
+
+    return date.toLocaleDateString("en-CA", {
+      month: "short",
+      day: "numeric",
+    });
+  }
+
+  function formatTimestamp(timestamp) {
+    if (!timestamp) return "-";
+
+    return new Date(timestamp).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  function initializeDates() {
+    const today = new Date();
+    const start = new Date();
+
+    start.setDate(today.getDate() - 3);
+
+    document.getElementById("endDate").value =
+      today.toISOString().slice(0, 10);
+
+    document.getElementById("startDate").value =
+      start.toISOString().slice(0, 10);
+
+    const savedKey = sessionStorage.getItem("testerKey");
+
+    if (savedKey) {
+      document.getElementById("testerKey").value = savedKey;
+    }
+  }
+
+  async function loadDashboard() {
+    const startDate =
+      document.getElementById("startDate").value;
+
+    const endDate =
+      document.getElementById("endDate").value;
+
+    const testerKey =
+      document.getElementById("testerKey").value;
+
+    const errorBox = document.getElementById("error");
+    errorBox.style.display = "none";
+
+    if (!testerKey) {
+      showError("Tester Key를 입력해주세요.");
+      return;
+    }
+
+    sessionStorage.setItem("testerKey", testerKey);
+
+    const query = new URLSearchParams();
+
+    if (startDate) query.append("start_date", startDate);
+    if (endDate) query.append("end_date", endDate);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/dashboard?${query}`,
+        {
+          headers: {
+            "X-Tester-Key": testerKey,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        let detail = `HTTP ${response.status}`;
+
+        try {
+          const body = await response.json();
+          detail = body.detail ?? detail;
+        } catch (_) {}
+
+        throw new Error(detail);
+      }
+
+      const data = await response.json();
+
+      renderDashboard(data);
+    } catch (error) {
+      showError(error.message);
+    }
+  }
+
+  function showError(message) {
+    const errorBox = document.getElementById("error");
+
+    errorBox.textContent = message;
+    errorBox.style.display = "block";
+  }
+
+  function renderDashboard(data) {
+    renderOverview(data.overview);
+    renderChart(data.daily_details);
+    renderTodayMetrics(data.today_metrics);
+    renderDailyDetails(data.daily_details);
+    renderVideos(data.today_processed_videos);
+  }
+
+  function renderOverview(overview) {
+    document.getElementById("totalVideos").textContent =
+      formatNumber(overview.total_videos);
+
+    document.getElementById("totalPlaytime").textContent =
+      formatDuration(overview.total_playtime_seconds);
+
+    document.getElementById("totalTokens").textContent =
+      formatNumber(overview.total_tokens);
+
+    document.getElementById("totalCost").textContent =
+      formatMoney(overview.total_cost_usd);
+  }
+
+  function renderChart(details) {
+    const chart = document.getElementById("costChart");
+    chart.innerHTML = "";
+
+    if (!details?.length) {
+      chart.innerHTML = "<span>데이터가 없습니다.</span>";
+      return;
+    }
+
+    const maxCost = Math.max(
+      ...details.map(row => Number(row.total_cost_usd))
+    );
+
+    details.forEach(row => {
+      const cost = Number(row.total_cost_usd);
+
+      const height =
+        maxCost === 0
+          ? 3
+          : Math.max((cost / maxCost) * 180, 3);
+
+      const wrapper = document.createElement("div");
+      wrapper.className = "bar-wrapper";
+
+      wrapper.innerHTML = `
+        <div class="bar-value">${formatMoney(cost)}</div>
+        <div class="bar" style="height:${height}px"></div>
+        <div class="bar-label">${formatDate(row.date)}</div>
+      `;
+
+      chart.appendChild(wrapper);
+    });
+  }
+
+  function renderTodayMetrics(metrics) {
+    document.getElementById("averageCost").textContent =
+      formatMoney(metrics.average_cost_per_video_usd);
+
+    document.getElementById("averageRuntime").textContent =
+      formatDuration(metrics.average_video_runtime_seconds);
+
+    document.getElementById("averageTokens").textContent =
+      Number(metrics.average_token_usage ?? 0).toFixed(1);
+
+    document.getElementById("periodCost").textContent =
+      formatMoney(metrics.period_total_cost_usd);
+  }
+
+  function renderDailyDetails(details) {
+    const tbody = document.getElementById("dailyDetails");
+
+    tbody.innerHTML = "";
+
+    [...details].reverse().forEach(row => {
+      const tr = document.createElement("tr");
+
+      tr.innerHTML = `
+        <td>${formatDate(row.date)}</td>
+        <td>${formatNumber(row.total_videos)}</td>
+        <td>${formatDuration(row.total_playtime_seconds)}</td>
+        <td>${formatNumber(row.total_tokens)}</td>
+        <td>${formatMoney(row.total_cost_usd)}</td>
+      `;
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderVideos(videos) {
+    const list = document.getElementById("videoList");
+    const title = document.getElementById("videoSectionTitle");
+
+    list.innerHTML = "";
+
+    title.textContent =
+      `오늘 처리된 영상 (${videos?.length ?? 0})`;
+
+    if (!videos?.length) {
+      list.innerHTML = "<span>오늘 처리된 영상이 없습니다.</span>";
+      return;
+    }
+
+    videos.forEach(video => {
+      const item = document.createElement("div");
+      item.className = "video";
+
+      const thumbnail = video.thumbnail_url
+        ? video.thumbnail_url
+        : "";
+
+      item.innerHTML = `
+        ${
+          thumbnail
+            ? `<img
+                 class="thumbnail"
+                 src="${thumbnail}"
+                 alt=""
+               />`
+            : `<div class="thumbnail"></div>`
+        }
+
+        <div>
+          <div class="video-title">
+            ${video.title ?? "Untitled Video"}
+          </div>
+
+          <div class="video-meta">
+            ${formatDuration(video.runtime_seconds)}
+            · ${formatNumber(video.total_tokens)} tokens
+            · ${formatMoney(video.cost_usd)}
+          </div>
+        </div>
+
+        <div class="video-time">
+          ${formatTimestamp(video.processed_at)}
+        </div>
+      `;
+
+      list.appendChild(item);
+    });
+  }
+
+  initializeDates();
+</script>
+
+</body>
+</html>
