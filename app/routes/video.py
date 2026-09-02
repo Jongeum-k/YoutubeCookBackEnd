@@ -7,13 +7,25 @@ from uuid import UUID
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.redis import redis_client
 from app.db.session import AsyncSessionLocal
 from app.dtos.gemini import GeminiUsage
 from app.dtos.quota import QuotaReservation
-from app.enums import GeminiRequestStatus, VideoAnalysisStatus
-from app.models import GeminiRequest, VideoAnalysis
+from app.enums import (
+    GeminiRequestStatus,
+    GeminiRequestType,
+    VideoAnalysisStatus,
+)
+from app.models import (
+    GeminiRequest,
+    Recipe,
+    RecipeIngredient,
+    RecipeStep,
+    VideoAnalysis,
+)
 from app.schemas.video import AnalyzeVideoRequest, RecipeAnalysis
 from app.services.gemini import GeminiService
 from app.services.pricing import GeminiPricingService
@@ -22,6 +34,7 @@ from app.services.quota import (
     QuotaExceededError,
     QuotaService,
 )
+from app.utils.youtube import extract_youtube_video_id
 
 
 router = APIRouter()
@@ -31,13 +44,128 @@ quota_service = QuotaService(redis_client)
 pricing_service = GeminiPricingService()
 
 
+class InvalidYoutubeUrlError(Exception):
+    pass
+
+
+def recipe_to_dict(recipe: Recipe) -> dict:
+    """Reshape a stored Recipe (+ children) into the same dict shape
+    RecipeAnalysis.model_dump() produces, so cached and freshly
+    analyzed responses look identical to the client."""
+
+    return {
+        "basic_info": {
+            "title": recipe.title,
+            "description": recipe.description,
+            "servings": recipe.servings,
+            "cuisine": recipe.cuisine,
+        },
+        "ingredients": [
+            {
+                "name": ingredient.name,
+                "amount": ingredient.amount,
+                "unit": ingredient.unit,
+                "note": ingredient.note,
+            }
+            for ingredient in recipe.ingredients
+        ],
+        "steps": [
+            {
+                "order": step.step_order,
+                "instruction": step.instruction,
+                "start_seconds": step.start_seconds,
+                "end_seconds": step.end_seconds,
+                "temperature": step.temperature,
+                "duration": step.duration,
+            }
+            for step in recipe.steps
+        ],
+        "tips": list(recipe.tips),
+    }
+
+
+def recipe_to_analysis(recipe: Recipe) -> RecipeAnalysis:
+    return RecipeAnalysis.model_validate(recipe_to_dict(recipe))
+
+
+async def load_recipes(youtube_video_id: str) -> list[Recipe]:
+    """Recipes are looked up directly by video id -- independent of
+    video_analyses, which stays a plain request log (many rows per
+    video, one per request, regardless of outcome)."""
+
+    async with AsyncSessionLocal() as db:
+        recipes = await db.scalars(
+            select(Recipe)
+            .where(Recipe.youtube_video_id == youtube_video_id)
+            .options(
+                selectinload(Recipe.ingredients),
+                selectinload(Recipe.steps),
+            )
+        )
+
+        return list(recipes)
+
+
+async def persist_recipe(
+    db: AsyncSession,
+    *,
+    youtube_video_id: str,
+    language: str,
+    result: RecipeAnalysis,
+) -> None:
+    recipe = Recipe(
+        youtube_video_id=youtube_video_id,
+        language=language,
+        title=result.basic_info.title,
+        description=result.basic_info.description,
+        servings=result.basic_info.servings,
+        cuisine=result.basic_info.cuisine,
+        tips=result.tips,
+    )
+
+    db.add(recipe)
+    await db.flush()
+
+    db.add_all(
+        RecipeIngredient(
+            recipe_id=recipe.id,
+            sort_order=index,
+            name=ingredient.name,
+            amount=ingredient.amount,
+            unit=ingredient.unit,
+            note=ingredient.note,
+        )
+        for index, ingredient in enumerate(result.ingredients)
+    )
+
+    db.add_all(
+        RecipeStep(
+            recipe_id=recipe.id,
+            step_order=step.order,
+            instruction=step.instruction,
+            start_seconds=step.start_seconds,
+            end_seconds=step.end_seconds,
+            temperature=step.temperature,
+            duration=step.duration,
+        )
+        for step in result.steps
+    )
+
+
 async def create_analysis_records(
     *,
+    youtube_video_id: str,
     youtube_url: str,
     model_name: str,
+    request_type: str,
+    language: str,
 ) -> tuple[UUID, UUID]:
+    """Every request gets its own video_analyses row -- one row per
+    request, success or failure, exactly as before this feature."""
+
     async with AsyncSessionLocal() as db:
         analysis = VideoAnalysis(
+            youtube_video_id=youtube_video_id,
             youtube_url=youtube_url,
             status=VideoAnalysisStatus.PROCESSING.value,
         )
@@ -49,6 +177,8 @@ async def create_analysis_records(
             analysis_id=analysis.id,
             attempt_number=1,
             model_name=model_name,
+            request_type=request_type,
+            language=language,
             status=GeminiRequestStatus.PROCESSING.value,
         )
 
@@ -63,6 +193,8 @@ async def complete_analysis_records(
     *,
     analysis_id: UUID,
     gemini_request_id: UUID,
+    youtube_video_id: str,
+    language: str,
     result: RecipeAnalysis,
     usage: GeminiUsage | None,
     cost,
@@ -90,9 +222,14 @@ async def complete_analysis_records(
         analysis.status = VideoAnalysisStatus.COMPLETED.value
         analysis.processing_duration_ms = analysis_duration_ms
         analysis.processed_at = now
-
-        # RecipeAnalysis의 실제 schema가 basic_info.title 구조라면 이 형태.
         analysis.title = result.basic_info.title
+
+        await persist_recipe(
+            db,
+            youtube_video_id=youtube_video_id,
+            language=language,
+            result=result,
+        )
 
         gemini_request.status = GeminiRequestStatus.COMPLETED.value
         gemini_request.duration_ms = gemini_duration_ms
@@ -107,9 +244,6 @@ async def complete_analysis_records(
 
         if cost:
             gemini_request.cost_usd = cost.total_usd
-
-            # pricing_version 컬럼도 실제 모델에 추가했다면 활성화.
-            # gemini_request.pricing_version = cost.pricing_version
 
         await db.commit()
 
@@ -200,13 +334,6 @@ async def analyze_cooking_video(
             request.tester_key
         )
 
-        analysis_id, gemini_request_id = (
-            await create_analysis_records(
-                youtube_url=str(request.youtube_url),
-                model_name=gemini_service.model,
-            )
-        )
-
         await websocket.send_json(
             {
                 "type": "quota",
@@ -216,11 +343,77 @@ async def analyze_cooking_video(
             }
         )
 
+        youtube_video_id = extract_youtube_video_id(
+            str(request.youtube_url)
+        )
+
+        if youtube_video_id is None:
+            raise InvalidYoutubeUrlError(str(request.youtube_url))
+
+        existing_recipes = await load_recipes(youtube_video_id)
+
+        target_recipe = next(
+            (
+                recipe
+                for recipe in existing_recipes
+                if recipe.language == request.language
+            ),
+            None,
+        )
+
+        # --- cache hit: this video already has this language ---
+        if target_recipe is not None:
+            await quota_service.commit(reservation)
+            reservation = None
+
+            await websocket.send_json(
+                {
+                    "type": "completed",
+                    "cached": True,
+                    "data": recipe_to_dict(target_recipe),
+                    "model": None,
+                    "model_version": None,
+                    "response_id": None,
+                    "usage": None,
+                    "cost": None,
+                }
+            )
+            return
+
+        source_recipe = next(
+            (
+                recipe
+                for recipe in existing_recipes
+                if recipe.language != request.language
+            ),
+            None,
+        )
+
+        is_translation = source_recipe is not None
+        request_type = (
+            GeminiRequestType.TRANSLATION.value
+            if is_translation
+            else GeminiRequestType.ANALYSIS.value
+        )
+        model_name = (
+            gemini_service.translation_model
+            if is_translation
+            else gemini_service.model
+        )
+
         await websocket.send_json(
             {
                 "type": "status",
                 "status": "analyzing",
             }
+        )
+
+        analysis_id, gemini_request_id = await create_analysis_records(
+            youtube_video_id=youtube_video_id,
+            youtube_url=str(request.youtube_url),
+            model_name=model_name,
+            request_type=request_type,
+            language=request.language,
         )
 
         chunks: list[str] = []
@@ -233,9 +426,17 @@ async def analyze_cooking_video(
 
         gemini_started_at = perf_counter()
 
-        async for chunk in gemini_service.analyze_cooking_video_stream(
-            str(request.youtube_url)
-        ):
+        if is_translation:
+            stream = gemini_service.translate_recipe_stream(
+                recipe_to_analysis(source_recipe),
+                target_language=request.language,
+            )
+        else:
+            stream = gemini_service.analyze_cooking_video_stream(
+                str(request.youtube_url)
+            )
+
+        async for chunk in stream:
             if chunk.text:
                 chunks.append(chunk.text)
 
@@ -249,10 +450,17 @@ async def analyze_cooking_video(
             if chunk.usage:
                 usage = chunk.usage
 
-                cost = pricing_service.calculate_cost(
-                    model=gemini_service.model,
-                    usage=usage,
-                )
+                try:
+                    cost = pricing_service.calculate_cost(
+                        model=model_name,
+                        usage=usage,
+                    )
+                except ValueError:
+                    # No pricing snapshot configured for this model yet
+                    # (e.g. a freshly-set translation model). Keep the
+                    # recipe itself working; cost just won't be tracked
+                    # until a snapshot is added.
+                    cost = None
 
             if chunk.response_id:
                 response_id = chunk.response_id
@@ -277,6 +485,8 @@ async def analyze_cooking_video(
         await complete_analysis_records(
             analysis_id=analysis_id,
             gemini_request_id=gemini_request_id,
+            youtube_video_id=youtube_video_id,
+            language=request.language,
             result=result,
             usage=usage,
             cost=cost,
@@ -290,8 +500,9 @@ async def analyze_cooking_video(
         await websocket.send_json(
             {
                 "type": "completed",
+                "cached": False,
                 "data": result.model_dump(),
-                "model": gemini_service.model,
+                "model": model_name,
                 "model_version": model_version,
                 "response_id": response_id,
                 "usage": (
@@ -338,6 +549,18 @@ async def analyze_cooking_video(
             {
                 "type": "error",
                 "code": "quota_exceeded",
+                "message": str(exc),
+            }
+        )
+
+    except InvalidYoutubeUrlError as exc:
+        if reservation:
+            await quota_service.rollback(reservation)
+
+        await websocket.send_json(
+            {
+                "type": "error",
+                "code": "invalid_youtube_url",
                 "message": str(exc),
             }
         )

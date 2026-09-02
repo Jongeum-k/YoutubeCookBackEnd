@@ -9,11 +9,18 @@ from app.core.config import get_settings
 from app.dtos.gemini import GeminiStreamChunk, GeminiUsage
 from app.schemas.video import RecipeAnalysis
 
+_LANGUAGE_NAMES = {
+    "ko": "Korean",
+    "en": "English",
+}
+
+
 class GeminiService:
     def __init__(self) -> None:
         settings = get_settings()
 
         self.model = settings.gemini_model
+        self.translation_model = settings.gemini_translation_model
 
         self.client = genai.Client(
             api_key=settings.gemini_api_key,
@@ -96,8 +103,65 @@ when they are not present or reasonably inferable.
             ]
         )
 
-        stream = await self.client.aio.models.generate_content_stream(
+        async for chunk in self._generate_structured_stream(
             model=self.model,
+            contents=contents,
+        ):
+            yield chunk
+
+    async def translate_recipe_stream(
+        self,
+        recipe: RecipeAnalysis,
+        *,
+        target_language: str,
+    ) -> AsyncIterator[GeminiStreamChunk]:
+        """Translate an already-extracted recipe into another language.
+
+        No video is attached -- this only re-expresses existing text
+        in another language, it does not re-analyze the source video.
+        """
+        language_name = _LANGUAGE_NAMES.get(
+            target_language,
+            target_language,
+        )
+
+        prompt = f"""
+Translate the following cooking recipe into {language_name}.
+
+Keep the structure identical to the source: the same number of
+ingredients in the same order, and the same number of steps in the
+same order. Only translate natural-language text -- titles,
+descriptions, ingredient names/notes, step instructions,
+temperatures, durations, and tips.
+
+Copy every numeric/timing field through unchanged (ingredient and
+step order, start_seconds, end_seconds). Do not invent, drop, or
+reorder anything.
+
+Source recipe (JSON):
+{recipe.model_dump_json()}
+""".strip()
+
+        contents = types.Content(
+            parts=[
+                types.Part(text=prompt),
+            ]
+        )
+
+        async for chunk in self._generate_structured_stream(
+            model=self.translation_model,
+            contents=contents,
+        ):
+            yield chunk
+
+    async def _generate_structured_stream(
+        self,
+        *,
+        model: str,
+        contents: types.Content,
+    ) -> AsyncIterator[GeminiStreamChunk]:
+        stream = await self.client.aio.models.generate_content_stream(
+            model=model,
             contents=contents,
             config={
                 "response_mime_type": "application/json",

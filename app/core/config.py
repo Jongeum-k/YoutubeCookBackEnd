@@ -7,6 +7,10 @@ class Settings(BaseSettings):
     gemini_api_key: str
     gemini_model: str = "gemini-3.6-flash"
 
+    # Cheaper/faster model used for translating an already-analyzed
+    # recipe into another language (no video re-analysis involved).
+    gemini_translation_model: str
+
     redis_url: str
     database_url: str
 

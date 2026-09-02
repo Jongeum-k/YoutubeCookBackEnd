@@ -1,5 +1,7 @@
 # app/schemas/video.py
 
+from typing import Literal
+
 from pydantic import BaseModel, HttpUrl
 
 
@@ -38,3 +40,4 @@ class RecipeAnalysis(BaseModel):
 class AnalyzeVideoRequest(BaseModel):
     tester_key: str
     youtube_url: HttpUrl
+    language: Literal["ko", "en"]
