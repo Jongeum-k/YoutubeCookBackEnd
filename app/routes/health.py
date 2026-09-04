@@ -26,10 +26,7 @@ async def check_database(
             text("""
                 SELECT
                     to_regclass('public.video_analyses') AS video_analyses,
-                    to_regclass('public.gemini_requests') AS gemini_requests,
-                    to_regclass('public.recipes') AS recipes,
-                    to_regclass('public.recipe_ingredients') AS recipe_ingredients,
-                    to_regclass('public.recipe_steps') AS recipe_steps
+                    to_regclass('public.gemini_requests') AS gemini_requests
             """)
         )
 
@@ -38,9 +35,6 @@ async def check_database(
         tables = {
             "video_analyses": row.video_analyses is not None,
             "gemini_requests": row.gemini_requests is not None,
-            "recipes": row.recipes is not None,
-            "recipe_ingredients": row.recipe_ingredients is not None,
-            "recipe_steps": row.recipe_steps is not None,
         }
 
         return {

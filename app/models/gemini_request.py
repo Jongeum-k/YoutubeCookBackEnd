@@ -48,22 +48,6 @@ class GeminiRequest(Base):
         nullable=False,
     )
 
-    # 'analysis' = video was processed by Gemini directly.
-    # 'translation' = an existing recipe (another language) was
-    # translated by a cheaper model, no video re-analysis involved.
-    request_type: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-        default="analysis",
-        server_default="analysis",
-    )
-
-    # Language this call ultimately produced a recipe for.
-    language: Mapped[str | None] = mapped_column(
-        String(5),
-        nullable=True,
-    )
-
     status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
@@ -189,13 +173,5 @@ class GeminiRequest(Base):
         CheckConstraint(
             "http_status IS NULL OR http_status BETWEEN 100 AND 599",
             name="chk_http_status",
-        ),
-        CheckConstraint(
-            "request_type IN ('analysis', 'translation')",
-            name="chk_gemini_request_type",
-        ),
-        CheckConstraint(
-            "language IS NULL OR language IN ('ko', 'en')",
-            name="chk_gemini_request_language",
         ),
     )

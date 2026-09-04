@@ -15,13 +15,3 @@ class GeminiRequestStatus(StrEnum):
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
-
-
-class GeminiRequestType(StrEnum):
-    ANALYSIS = "analysis"
-    TRANSLATION = "translation"
-
-
-class Language(StrEnum):
-    KO = "ko"
-    EN = "en"
